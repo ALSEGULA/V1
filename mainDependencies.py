@@ -10,8 +10,8 @@ import numpy as np
 
 ##########################################################
 
-import pygame
-from pygame.locals import *
+#import pygame
+#from pygame.locals import *
 
 ##########################################################
 # insert syspath to project folder so examples can be run.
