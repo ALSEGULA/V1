@@ -4,20 +4,15 @@ from pycatia.space_analyses_interfaces.inertia import Inertia
 import numpy as np
 
 class Object:
-    def __init__(self):
+    def __init__(self,env):
         self.catia_instance = None
         self.frame_conversion_matrix = None
         self.cog = None
         self.BBO = None
-        """
-        try:
-            self.catia_instance = self.getChild(env,name,path) # initialisation de l'instance objet
-        except Exception as e:
-            print("Probleme de Object.__init__ : ", e)
-        """
+        self.env = env
 
-    def getChild(self,env,name,path):
-        current_level = env.product  # Commencer à partir du produit racine
+    def getChild(self,name,path):
+        current_level = self.env.product  # Commencer à partir du produit racine
 
         # Parcourir chaque niveau du chemin
         for folder_name in path:
@@ -29,7 +24,7 @@ class Object:
                     found = True
                     break
             if not found:
-                raise ValueError(f"Class Object - get_child() : incorrect path {path}")
+                raise ValueError(f"Class Object - getChild() : incorrect path {path}")
 
         # Une fois au bon niveau, rechercher la pièce
         children = current_level.get_children()
@@ -37,13 +32,13 @@ class Object:
             if child.name == name:
                 return child
 
-        raise ValueError(f"Class Object - get_child() : incorrect name {name}")
+        raise ValueError(f"Class Object - getChild() : incorrect name {name}")
 
-    def getPrincipalAxes(self,env):
+    def getPrincipalAxes(self):
         if self.catia_instance is None:
-            raise ValueError("Appel() à getPrincipalAxes() sur un objet sans instance catia")
+            raise ValueError("Appel à getPrincipalAxes() sur un objet sans instance catia")
         try:
-            inertia = Inertia(env.spa_i.add(self.catia_instance).com_object)
+            inertia = Inertia(self.env.spa_i.add(self.catia_instance).com_object)
             self.principal_axes = inertia.get_principal_axes()
         except Exception as e:
             print(f"Error with getPrincipalAxes() : {e}")
@@ -91,20 +86,19 @@ class Object:
         self.mediane_global = geometrical_center.tolist()
 
     # function for getting center of gravtity (cog)
-    def getCOG(self,env):
+    def getCOG(self):
         if self.catia_instance is None:
             raise ValueError("Appel à getCOG() sur un objet sans instance catia")
         try:
-            inertia = Inertia(env.spa_i.add(self.catia_instance).com_object)
+            inertia = Inertia(self.env.spa_i.add(self.catia_instance).com_object)
             self.cog = inertia.get_cog_position()
         except Exception as e:
             print(f"Error with getCOG(): {e}")
 
-# fonction qui renvoie la matrice de changement de base pour la conversion local->global
+    # fonction qui renvoie la matrice de changement de base pour la conversion local->global
     def getFrameConversionMatrix(self):
         try:
-            if self.principal_axes is None:
-                self.getPrincipalAxes()
+            self.getPrincipalAxes()
 
             # Vecteurs des axes locaux
             local_x_axis = np.array([self.principal_axes[0], self.principal_axes[3], self.principal_axes[6]])
@@ -117,13 +111,13 @@ class Object:
             print(f"Error with getFrameConversionMatrix(): {e}")
 
     # fonction pour convertir les coordonnées de array dans le repère global en coordonnées dans le repère local de la piece
-    def convertGlobalToLocal(self,env,array):
+    def convertGlobalToLocal(self,array):
         try:
 
             if self.frame_conversion_matrix is None:
                 self.getFrameConversionMatrix()
             if self.cog is None:
-                self.getCOG(env)
+                self.getCOG()
 
             x_global = array[0]
             y_global = array[1]
@@ -136,8 +130,6 @@ class Object:
 
             # Inversion de la transformation en utilisant les axes locaux
             # Cela nécessite de résoudre un système linéaire
-            # On utilise la matrice inverse des axes principaux
-            # Calcul de la matrice inverse
 
             inverse_rotation_matrix = np.linalg.inv((self.frame_conversion_matrix))
 
@@ -153,10 +145,11 @@ class Object:
         return local_x/1000, local_y/1000, local_z/1000  
     
     # fonction qui convertit dans le repère local et enregistre mediane_global
-    def getLocalCenter(self,env):
-        self.mediane_local = self.convertGlobalToLocal(env,self.mediane_global)
+    # TODO : il est surement plus simple d'ajouter cette ligne directement dans computeGeometricalCenter()
+    def getLocalCenter(self):
+        self.mediane_local = self.convertGlobalToLocal(self.mediane_global)
 
-    # fonction qui convertit le tableau exprimé dasn le repère local "array" dans le repère global
+    # fonction qui convertit le tableau exprimé dans le repère local "array" dans le repère global
     def convertLocalToGlobal(self,array):
         # les parametres suivants permettent de s'adapter au sens de la piece : on regarde le signe ( dans le repere local ) de la 
         # mediane d'une grande diagonale de la bounding box pour savoir que est le sens de la piece ( haut/bas etc. )
@@ -172,3 +165,62 @@ class Object:
             res.append(global_point * 1000)
 
         return res
+    
+    # Fonction qui renvoie le vecteur normal à un plan defini par les trois points de la liste points
+    # Attention : L'ordre des points dans la liste est important
+    def planNormal(self, points):
+        v1 = np.array(points[0]) - np.array(points[1])
+        v2 = np.array(points[2]) - np.array(points[1])
+        normal = np.cross(v1, v2)
+        return normal / np.linalg.norm(normal)
+    
+    # fonction qui renvoie True si les vecteurs v1 et v2 sont colineaires, False sinon
+    def vectorsAreColinear(self, v1, v2):
+        # Calculer le produit vectoriel des deux vecteurs
+        dot_product = np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
+
+        if abs(dot_product - 1) < 0.01 or abs(dot_product + 1) < 0.01:
+            return True
+        return False
+    
+    # function for getting angle of a point projecting onto plane normal to globalAxisRotation
+    # with respect to projection of zero_angle_point
+    def getAngle(self,globalRotationAxis, zero_angle_point, point):
+        # Convertir les points de l'axe de rotation en vecteur
+        point1 = np.array(globalRotationAxis[0]).flatten()
+        point2 = np.array(globalRotationAxis[1]).flatten()
+        axis_vector = point2 - point1
+
+        # Normaliser le vecteur de l'axe
+        axis_vector /= np.linalg.norm(axis_vector)
+
+        # Convertir les points en numpy arrays
+        zero_angle_point = np.array(zero_angle_point).flatten()
+        point = np.array(point).flatten()
+
+        # Calculer le vecteur de projection
+        vector_to_project_point = point - point1
+        vector_to_project_ref = zero_angle_point - point1
+
+        # Projeter le vecteur sur le plan normal à l'axe
+        projection_point_on_axis = np.dot(vector_to_project_point, axis_vector) * axis_vector
+        projection_point_on_plane = vector_to_project_point - projection_point_on_axis
+
+        projection_ref_on_axis = np.dot(vector_to_project_ref, axis_vector) * axis_vector
+        projection_ref_on_plane = vector_to_project_ref - projection_ref_on_axis
+
+        # Vérifier si les vecteurs sont colinéaires
+        if self.vectorsAreColinear(projection_point_on_plane, projection_ref_on_plane):
+            return 0
+
+        # Calculer l'angle entre les vecteurs projetés
+        angle_radians = np.arccos(np.dot(projection_ref_on_plane, projection_point_on_plane) / (np.linalg.norm(projection_ref_on_plane) * np.linalg.norm(projection_point_on_plane)))
+
+        # Déterminer le sens de rotation
+        if np.dot(np.cross(projection_ref_on_plane, projection_point_on_plane), axis_vector) > 0: 
+            angle_radians = -angle_radians
+
+        angle_degrees = np.degrees(angle_radians)
+
+        return angle_degrees
+
