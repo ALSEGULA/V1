@@ -2,8 +2,10 @@
 
 import json
 import numpy as np
+
 from scipy.spatial import ConvexHull
 from Object import Object
+from dotenv import set_key
 
 class Serrage(Object):
     def __init__(self,env):
@@ -398,11 +400,27 @@ class Serrage(Object):
                     collision_detected = True
                     break
             if not collision_detected:
-                print("Solution trouvee !")
-                break
+                print("Solution trouvee")
+                set_key('.env', 'TEXT_LABEL', "Solution trouvée")
+                return
 
             self.rotateAroundAxis(self.global_rotation_axis,sense_of_rotation*angle)
             self.rotateStickPointsAndBBOAroundAxis(self.global_rotation_axis,sense_of_rotation*angle)
             sense_of_rotation = -sense_of_rotation
 
+        print("Pas de solution trouvée")
+        set_key('.env', 'TEXT_LABEL', "Pas de solution trouvée")
 
+    # fonction de mise à jour à appeler une fois que le serrage à bouger pour prendre en compte les modifications
+    def update(self):
+        self.getCOG()
+        self.getFrameConversionMatrix()
+        self.computeGeometricalCenter()
+        self.getLocalCenter()
+        self.getRotationAxis()
+
+    # fonction qui effectue les trois étapes pour positionner le serrage sur le PCM dont les paramètres sont passés en argument
+    def positionOntoPCM(self,stick_points_pcm,pcm_name,pcm_path):
+        self.alignOrientedPlans(stick_points_pcm)
+        self.stickToPCM(stick_points_pcm)
+        self.rotateToStickToPCM(stick_points_pcm,pcm_name,pcm_path)
