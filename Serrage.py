@@ -2,10 +2,13 @@
 
 import json
 import numpy as np
+import os
+import time
 
 from scipy.spatial import ConvexHull
 from Object import Object
 from dotenv import set_key
+from getApplicationPath import getApplicationPath
 
 class Serrage(Object):
     def __init__(self,env):
@@ -16,7 +19,7 @@ class Serrage(Object):
         self.local_collision_hull = None
         self.global_collision_hull = None
         # TODO : adapter les fonctions qui prenennt env en argument pour qu'elles recuperent la variable membre self.env
-        object_serrage = super().__init__(env)
+        super().__init__(env)
 
     # fonction qui recupere l'objet catia associe au serrage selectionne
     def getCatiaInstance(self,name="SERRAGE_DIN_040.1",path=[]):
@@ -25,7 +28,13 @@ class Serrage(Object):
     # fonction qui complete la variable membre local_stick_points en allant chercher les valeurs dasn le fichier points.json,
     # convertit ces points dans le repère global et enregistre le résultat dans global_stick_points
     def getStickPoints(self):
-        with open('points.json', 'r') as f:
+
+        #TODO : reflechir a mettre application_path en variable membre de la classe 
+        application_path = getApplicationPath()
+        parent_path = os.path.dirname(application_path)  
+        # Chemin vers le fichier points.json qui doit etre place dans le repertoire parent de l'executable
+        points_path = os.path.join(parent_path, 'points.json')
+        with open(points_path, 'r') as f:
             data = json.load(f)
         self.local_stick_points = data.get("stickPointsSerrage", [])
         self.global_stick_points = self.convertLocalToGlobal(self.local_stick_points)
@@ -33,7 +42,12 @@ class Serrage(Object):
     # fonction qui complete la variable membre local_collision_hull en allant chercher les valeurs dasn le fichier points.json,
     # convertit ces points dans le repère global et enregistre le résultat dans global_collision_hull
     def getCollisionHull(self):
-        with open('points.json', 'r') as f:
+        application_path = getApplicationPath()
+        parent_path = os.path.dirname(application_path)  
+        # Chemin vers le fichier points.json qui doit etre place dans le repertoire parent de l'executable
+        points_path = os.path.join(parent_path, 'points.json')
+        time.sleep(6)
+        with open(points_path, 'r') as f:
             data = json.load(f)
         self.local_collision_hull = data.get("collisionHullSerrage",[])
         self.global_collision_hull = self.convertLocalToGlobal(self.local_collision_hull)
@@ -41,7 +55,11 @@ class Serrage(Object):
     # fonction qui complete la variable membre local_rotation_axis en allant chercher les valeurs dasn le fichier points.json,
     # convertit ces points dans le repère global et enregistre le résultat dans global_rotation_axis
     def getRotationAxis(self):
-        with open('points.json', 'r') as f:
+        application_path = getApplicationPath()
+        parent_path = os.path.dirname(application_path) 
+        # Chemin vers le fichier points.json qui doit etre place dans le repertoire parent de l'executable
+        points_path = os.path.join(parent_path, 'points.json')
+        with open(points_path, 'r') as f:
             data = json.load(f)
         self.local_rotation_axis = data.get("rotationAxis", [])
         self.global_rotation_axis = self.convertLocalToGlobal(self.local_rotation_axis)
@@ -390,6 +408,10 @@ class Serrage(Object):
     # ( qui est celle de la pince )
     # Si on arrive a une rotation de 180° sans avoir trouve d'angle qui convient, la fonction s'arrete
     def rotateUntilNoCollision(self,collision_hull_pince):
+
+        application_path = getApplicationPath()
+        env_path = os.path.join(application_path, '.env')
+
         collision_detected = False
         sense_of_rotation = 1
 
@@ -401,7 +423,7 @@ class Serrage(Object):
                     break
             if not collision_detected:
                 print("Solution trouvee")
-                set_key('.env', 'TEXT_LABEL', "Solution trouvée")
+                set_key(env_path, 'TEXT_LABEL', "Solution trouvée")
                 return
 
             self.rotateAroundAxis(self.global_rotation_axis,sense_of_rotation*angle)
@@ -409,16 +431,17 @@ class Serrage(Object):
             sense_of_rotation = -sense_of_rotation
 
         print("Pas de solution trouvée")
-        set_key('.env', 'TEXT_LABEL', "Pas de solution trouvée")
+        set_key(env_path, 'TEXT_LABEL', "Pas de solution trouvée")
 
     # fonction de mise à jour à appeler une fois que le serrage à bouger pour prendre en compte les modifications
     def update(self):
+        application_path = getApplicationPath()
+        env_path = os.path.join(application_path, '.env')
         self.getCOG()
         self.getFrameConversionMatrix()
         self.computeGeometricalCenter()
         self.getLocalCenter()
         self.getRotationAxis()
-
     # fonction qui effectue les trois étapes pour positionner le serrage sur le PCM dont les paramètres sont passés en argument
     def positionOntoPCM(self,stick_points_pcm,pcm_name,pcm_path):
         self.alignOrientedPlans(stick_points_pcm)
