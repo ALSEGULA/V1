@@ -67,27 +67,26 @@ def selectParts(env,pince,serrage,pcm,selection_event):
 
         # On demande a l'utilisateur de selectionner le PCM, puis le serrage, puis le(s) pince(s)
         if c == 0:
-            #set_key('.env', 'TEXT_LABEL', "Sélectionner le PCMFRA") # ne fonctionne pas
-            set_key(env_path, 'TEXT_LABEL', "Sélectionner le PCMFRA")
+            set_key(env_path, 'TEXT_LABEL', "Sélectionner le PCM")
             selection_event.wait()
-            while selection_event.get() != "confirmed":
+            while selection_event.get() != "confirmed": # cette partie là est intuile pour le moment ( un seul bouton )
                 print("Il faut confirmer la sélection")
             selection_event.clear()
-            set_key(env_path, 'TEXT_LABEL', "Patientez")
+            set_key(env_path, 'TEXT_LABEL', "Patienter")
         elif c == 1:
             set_key(env_path, 'TEXT_LABEL', "Sélectionner le serrage")
             selection_event.wait()
             while selection_event.get() != "confirmed":
                 print("Il faut confirmer la sélection")
             selection_event.clear()
-            set_key(env_path, 'TEXT_LABEL', "Patientez")
+            set_key(env_path, 'TEXT_LABEL', "Patienter")
         else:
             set_key(env_path, 'TEXT_LABEL', "Sélectionner la pince")
             selection_event.wait()
             while selection_event.get() != "confirmed":
                 print("Il faut confirmer la sélection")
             selection_event.clear()
-            set_key(env_path, 'TEXT_LABEL', "Patientez")
+            set_key(env_path, 'TEXT_LABEL', "Patienter")
 
         # on recupere l'objet selectionne par l'utilisateur
         selection = env.document.selection
@@ -143,26 +142,33 @@ def startBackend(selection_event):
     pythoncom.CoInitialize()
 
     try:
-
         env = Environnement.Environnement()
         env.caa = mainDependencies.catia()
         env.document = env.caa.active_document  # recuperer le document catia ouvert au lancement du programme
         env.product = env.document.product
         env.spa_i = env.document.spa_workbench().inertias
+        while True:
+            try:
+                serrage = Serrage(env)
+                pcm = Pcm(env)
+                pince = Pince(env)
 
-        serrage = Serrage(env)
-        pcm = Pcm(env)
-        pince = Pince(env)
+                selectParts(env,pince,serrage,pcm,selection_event)
 
-        selectParts(env,pince,serrage,pcm,selection_event)
+                serrage.positionOntoPCM(pcm.global_stick_points,pcm.name,pcm.path)
 
-        serrage.positionOntoPCM(pcm.global_stick_points,pcm.name,pcm.path)
+                serrage.update() # mise a jour necessaire car le serrage a bouge
 
-        serrage.update() # mise a jour necessaire car le serrage a bouge
+                serrage.getCollisionHull()
 
-        serrage.getCollisionHull()
-
-        serrage.rotateUntilNoCollision(pince.global_collision_hull)
+                serrage.rotateUntilNoCollision(pince.global_collision_hull)
+            except Exception as e:
+                # recuperation du chemin ou est situe l'executable
+                application_path = getApplicationPath()
+                # On en deduit que le fichier .env se situe dans le même répertoire
+                env_path = os.path.join(application_path, '.env')
+                set_key(env_path, 'TEXT_LABEL', f"Erreur rencontrée : {e}")
+                time.sleep(3)
 
     finally:
         # Nettoyage COM

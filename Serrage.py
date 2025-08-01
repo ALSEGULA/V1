@@ -424,6 +424,7 @@ class Serrage(Object):
             if not collision_detected:
                 print("Solution trouvee")
                 set_key(env_path, 'TEXT_LABEL', "Solution trouvée")
+                time.sleep(3)
                 return
 
             self.rotateAroundAxis(self.global_rotation_axis,sense_of_rotation*angle)
@@ -432,6 +433,7 @@ class Serrage(Object):
 
         print("Pas de solution trouvée")
         set_key(env_path, 'TEXT_LABEL', "Pas de solution trouvée")
+        time.sleep(3)
 
     # fonction de mise à jour à appeler une fois que le serrage à bouger pour prendre en compte les modifications
     def update(self):
