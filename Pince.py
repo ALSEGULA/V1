@@ -12,8 +12,11 @@ class Pince(Object):
         self.local_collision_hull = None
         self.global_collision_hull = []
 
+    # TODO : implementer la solution avec self.path
     def getCatiaInstance(self,name,path=["ENVIRONNEMENT.1", "CYCLE/MURS.1","SOUDURE.1","OP95_PINCE_A6.1"]):
-        self.catia_instance = super().getChild(name,path)
+        self.name = name
+        self.path = self.getTreePath('PINCE_TREE_PATH')
+        self.catia_instance = super().getChild(name,self.path)
 
     # fonction qui complete la variable membre local_collision_hull en allant chercher les valeurs dasn le fichier points.json,
     # convertit ces points dans le repère global et enregistre le résultat dans global_collision_hull
@@ -26,4 +29,4 @@ class Pince(Object):
             data = json.load(f)
         self.local_collision_hull = data.get("collisionHullPince",[])
         for collision_hull in self.local_collision_hull:
-            self.global_collision_hull.append(self.convertLocalToGlobal(collision_hull))
+            self.global_collision_hull.append(self.convertLocalToGlobal(collision_hull))    

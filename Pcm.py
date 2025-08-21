@@ -8,16 +8,17 @@ from getApplicationPath import getApplicationPath
 
 class Pcm(Object):
     def __init__(self,env):
+        super().__init__(env)
         self.local_stick_points = None
         self.global_stick_points = None
         self.name = None
         self.path = None
-        super().__init__(env)
 
+    # TODO : implementer la solution avec self.path
     def getCatiaInstance(self,name,path=["ENVIRONNEMENT.1","PCM_FRA.1","PCM.1"]):
         self.name = name
-        self.path = path
-        self.catia_instance = super().getChild(name,path)
+        self.path = self.getTreePath('PCM_TREE_PATH')
+        self.catia_instance = super().getChild(name,self.path)
 
     def getStickPoints(self):
         application_path = getApplicationPath()

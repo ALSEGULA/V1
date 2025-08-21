@@ -21,14 +21,16 @@ class Serrage(Object):
         # TODO : adapter les fonctions qui prenennt env en argument pour qu'elles recuperent la variable membre self.env
         super().__init__(env)
 
+    # TODO : implementer la solution avec self.path
     # fonction qui recupere l'objet catia associe au serrage selectionne
     def getCatiaInstance(self,name="SERRAGE_DIN_040.1",path=[]):
-        self.catia_instance = super().getChild(name,path)
+        self.name = name
+        self.path = self.getTreePath('SERRAGE_TREE_PATH')
+        self.catia_instance = super().getChild(name,self.path)
 
     # fonction qui complete la variable membre local_stick_points en allant chercher les valeurs dasn le fichier points.json,
     # convertit ces points dans le repère global et enregistre le résultat dans global_stick_points
     def getStickPoints(self):
-
         #TODO : reflechir a mettre application_path en variable membre de la classe 
         application_path = getApplicationPath()
         parent_path = os.path.dirname(application_path)  
@@ -41,6 +43,7 @@ class Serrage(Object):
 
     # fonction qui complete la variable membre local_collision_hull en allant chercher les valeurs dasn le fichier points.json,
     # convertit ces points dans le repère global et enregistre le résultat dans global_collision_hull
+    # TODO : mettre cette fonction dans Object et passer "collisionSerrage" en argument
     def getCollisionHull(self):
         application_path = getApplicationPath()
         parent_path = os.path.dirname(application_path)  
@@ -448,4 +451,4 @@ class Serrage(Object):
     def positionOntoPCM(self,stick_points_pcm,pcm_name,pcm_path):
         self.alignOrientedPlans(stick_points_pcm)
         self.stickToPCM(stick_points_pcm)
-        self.rotateToStickToPCM(stick_points_pcm,pcm_name,pcm_path)
+        self.rotateToStickToPCM(stick_points_pcm,pcm_name,pcm_path) 

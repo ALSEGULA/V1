@@ -2,6 +2,13 @@
 
 from pycatia.space_analyses_interfaces.inertia import Inertia
 import numpy as np
+import os
+
+import time
+import win32com.client
+
+from getApplicationPath import getApplicationPath
+from dotenv import load_dotenv
 
 class Object:
     def __init__(self,env):
@@ -33,18 +40,47 @@ class Object:
                 return child
 
         raise ValueError(f"Class Object - getChild() : incorrect name {name}")
+    
+    # function for getting bounding box parameters associated to the object 
+    def getBoundingBoxParameters(self,env):
+        parameters = env.product.parameters
+        BBOx,BBOy,BBOz,BBLx,BBLy,BBLz = None,None,None,None,None,None
 
-    def getPrincipalAxes(self):
-        if self.catia_instance is None:
-            raise ValueError("Appel à getPrincipalAxes() sur un objet sans instance catia")
-        try:
-            inertia = Inertia(self.env.spa_i.add(self.catia_instance).com_object)
-            self.principal_axes = inertia.get_principal_axes()
-        except Exception as e:
-            print(f"Error with getPrincipalAxes() : {e}")
+        # fonction pour recuperer les coordonnees de la bounding box en nombre exploitable
+        def cleanAndConvert(value):
+            # Remove units (e.g., "mm")
+            value = value.replace("mm", "").strip()
+            # Replace comma with dot for decimal numbers
+            value = value.replace(",", ".")
+            # Convert to float
+            return float(value)
 
+        for p in parameters:
+            if env.product.name in p.name:
+                if "BBOx" in p.name:
+                    BBOx = cleanAndConvert(p.value_as_string())
+                elif "BBOy" in p.name:
+                    BBOy = cleanAndConvert(p.value_as_string())
+                elif "BBOz" in p.name:
+                    BBOz = cleanAndConvert(p.value_as_string())
+                elif "BBLx" in p.name:
+                    BBLx = cleanAndConvert(p.value_as_string())
+                elif "BBLy" in p.name:
+                    BBLy = cleanAndConvert(p.value_as_string())
+                elif "BBLz" in p.name:
+                    BBLz = cleanAndConvert(p.value_as_string())
+
+        if None in [BBOx, BBOy, BBOz, BBLx, BBLy, BBLz]:
+            raise ValueError(f"get_bounding_box_parameters : impossible to get BBO and BBL parameters for {env.product.name}")
+
+        return [BBOx,BBOy,BBOz,BBLx,BBLy,BBLz]
+    
     #TODO : voir s'il n'est pas possible d'alléger la fonction ( seule la mediane est importante )
-    def fillBBOArray(self,BBO_BBL_parameters):
+    def fillBBOArray(self,env):
+
+        BBOx,BBOy,BBOz,BBLx,BBLy,BBLz = self.getBoundingBoxParameters(env)
+        BBO_BBL_parameters = [BBOx,BBOy,BBOz,BBLx,BBLy,BBLz]
+
         BBOx = BBO_BBL_parameters[0]
         BBOy = BBO_BBL_parameters[1]
         BBOz = BBO_BBL_parameters[2]
@@ -72,6 +108,88 @@ class Object:
                     [BBOx + A2x * BBLy + A3x * BBLz, BBOy + A2y * BBLy + A3y * BBLz, BBOz + A2z * BBLy + A3z * BBLz],
                     [BBOx + A1x * BBLx + A2x * BBLy + A3x * BBLz, BBOy + A1y * BBLx + A2y * BBLy + A3y * BBLz, BBOz + A1z * BBLx + A2z * BBLy + A3z * BBLz]
                 ]
+    
+    # Attention : il existe à l'heure actuelle une fonction getBoundingBoxParameters definie dans la classe object
+    # qui sert à récupérer les paramètres de la BBO après que la commande de mesure d'inertie ait été lancée
+    # Cette fonction là est plus complète : elle lance la commande pour complète la BBO
+    def getBBOParameters(self,env):
+        try:
+            # Ouvrir une instance de CATIA via COM
+            catia = win32com.client.Dispatch("CATIA.Application")
+            catia.Visible = True  # Optionnel : rendre CATIA visible ou non
+            
+            # Récupérer l'objet COM du produit
+            selection = catia.ActiveDocument.Selection
+            selection.clear()  # Vider la sélection existante
+
+            # Ajouter l'objet COM du produit à la sélection virtuelle
+            selection.Add(self.catia_instance.com_object)  # Utilisation de com_object (en minuscule)
+
+            # Lancer la commande "Mesures d'inertie"
+            catia.StartCommand("Mesures d'inertie")
+
+            # Attendre que la commande se termine (une petite pause pour s'assurer que la commande est exécutée)
+            time.sleep(10)  
+
+            self.fillBBOArray(env)
+
+            # On ferme la fenêtre de mesure d'inertie
+            window = catia.ActiveWindow
+            if window is not None:
+                window.Close()  
+
+        except Exception as e:
+            print(f"Erreur lors du lancement de la commande inertie sur {self.name}: {e}")
+    
+    # / separateur et // pour ignorer /
+    # TODO : a commenter et arranger
+    def customSplit(self,s):
+        parts = []
+        buffer = ""
+        i = 0
+
+        if s==None:
+            return parts
+
+        if len(s) == 0:
+            return parts
+
+        while i < len(s):
+            if s[i] == "/":
+                if i + 1 < len(s) and s[i + 1] == "/":
+                    buffer += "/"  # Ajoute un seul slash
+                    i += 2         # Ignore les deux slashes
+                else:
+                    parts.append(buffer)
+                    buffer = ""
+                    i += 1
+            else:
+                buffer += s[i]
+                i += 1
+        parts.append(buffer)  # Ajouter le dernier morceau
+        return parts
+    
+    # fonction qui renvoie un tableau rensiegnant le chemin pour aller chercher l'objet dans l'arborescence catia
+    # la valeur de ce tableau est stockée dans la variable d'environnement de cle 'key'
+    def getTreePath(self,key):
+        application_path = getApplicationPath()
+        env_path = os.path.join(application_path, '.env')
+        load_dotenv(env_path,override=True)
+
+        chemin = os.getenv(key)
+
+        tableau_dossiers = self.customSplit(chemin)
+
+        return tableau_dossiers
+
+    def getPrincipalAxes(self):
+        if self.catia_instance is None:
+            raise ValueError("Appel à getPrincipalAxes() sur un objet sans instance catia")
+        try:
+            inertia = Inertia(self.env.spa_i.add(self.catia_instance).com_object)
+            self.principal_axes = inertia.get_principal_axes()
+        except Exception as e:
+            print(f"Error with getPrincipalAxes() : {e}")
         
     # return geometrical center of BBO ( mediane_global )
     def computeGeometricalCenter(self):
@@ -151,8 +269,8 @@ class Object:
 
     # fonction qui convertit le tableau exprimé dans le repère local "array" dans le repère global
     def convertLocalToGlobal(self,array):
-        # les parametres suivants permettent de s'adapter au sens de la piece : on regarde le signe ( dans le repere local ) de la 
-        # mediane d'une grande diagonale de la bounding box pour savoir que est le sens de la piece ( haut/bas etc. )
+        # les parametres suivants permettent de s'adapter au sens de la piece : on regarde le signe ( dans le repere local ) du
+        # centre geometrique de la bounding box pour savoir quel est le sens de la piece ( haut/bas etc. )
         # En procedant ainsi, on s'assure que le repere local de la piece y est correctement fixe, quel que soit son sens
         # Attention : cette methode ne fonctionne que pour des pieces asymeytriques !
         scaling = np.array([1 if self.mediane_local[i] >= 0 else -1 for i in range(3)])
