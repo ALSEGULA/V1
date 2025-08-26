@@ -4,54 +4,153 @@ import Environnement
 import mainDependencies
 import pythoncom
 import os
-import sys
 import time # pour les tests
 
 from Serrage import Serrage
 from Pcm import Pcm
 from Pince import Pince
+from Sphere import Sphere
 from getApplicationPath import getApplicationPath
 
 from dotenv import set_key
 
-#TODO : ecrire une fonction pour fermer automatiquement la feneêtre qui s'ouvre  a l'appel de la fonction de mesure d'inertie
+import win32con
+import win32gui
 
-# fonction pour recuperer les coordonnees de la bounding box en nombre exploitable
-def cleanAndConvert(value):
-    # Remove units (e.g., "mm")
-    value = value.replace("mm", "").strip()
-    # Replace comma with dot for decimal numbers
-    value = value.replace(",", ".")
-    # Convert to float
-    return float(value)
+import win32com.client # pour les tests
 
-# function for getting bounding box parameters associated to a specified product of name 'product_name' in the active document
-# if the object studied is not a product, the name of the parent product has to be given
-def getBoundingBoxParameters(env):
-    parameters = env.product.parameters
-    BBOx,BBOy,BBOz,BBLx,BBLy,BBLz = None,None,None,None,None,None
+from pycatia.space_analyses_interfaces.inertia import Inertia # pour les tests : voir si on garde ou pas
 
-    for p in parameters:
-        if env.product.name in p.name:
-            if "BBOx" in p.name:
-                BBOx = cleanAndConvert(p.value_as_string())
-            elif "BBOy" in p.name:
-                BBOy = cleanAndConvert(p.value_as_string())
-            elif "BBOz" in p.name:
-                BBOz = cleanAndConvert(p.value_as_string())
-            elif "BBLx" in p.name:
-                BBLx = cleanAndConvert(p.value_as_string())
-            elif "BBLy" in p.name:
-                BBLy = cleanAndConvert(p.value_as_string())
-            elif "BBLz" in p.name:
-                BBLz = cleanAndConvert(p.value_as_string())
+#TODO : ecrire une fonction pour fermer automatiquement la fenêtre qui s'ouvre  a l'appel de la fonction de mesure d'inertie
 
-    if None in [BBOx, BBOy, BBOz, BBLx, BBLy, BBLz]:
-        raise ValueError(f"get_bounding_box_parameters : impossible to get BBO and BBL parameters for {env.product.name}")
+# Fonction pour fermer la fenetre de mesure d'inertie quand la commande est appelee
+# TODO : ne fonctionne pas, a debugger
+def closeInertiaWindow():
+    handle = win32gui.FindWindow(None, "Mesure d'inertie")
+    win32gui.PostMessage(handle, win32con.WM_CLOSE, 0, 0)
 
-    return [BBOx,BBOy,BBOz,BBLx,BBLy,BBLz]
+# Function for giving all children in a specified path given in argument
+def getChildrenFromPath(env,path):
+    current_level = env.product
+    # Parcourir chaque niveau du chemin
+    for folder_name in path:
+        children = current_level.get_children()
+        found = False
+        for child in children:
+            if child.name == folder_name:
+                current_level = child
+                found = True
+                break
+        if not found:
+            raise ValueError(f"Class Object - getChild() : incorrect path {path}")
+        
+    # Une fois au bon niveau, rechercher la pièce
+    return current_level.get_children()
 
-# probleme : les arguments sont des copies de l'objet, pas l'objet...
+
+def selectPinces(env,names):
+    array = []
+
+    pince = Pince(env)
+    path = pince.getTreePath('PINCE_TREE_PATH')
+
+    # recuperation du chemin ou est situe l'executable
+    application_path = getApplicationPath()
+    # On en deduit que le fichier .env se situe dans le même répertoire
+    env_path = os.path.join(application_path, '.env')
+
+    set_key(env_path, 'TEXT_LABEL', f"Patienter - Sélection des pinces en cours")
+        
+    # Une fois au bon niveau, rechercher la pièce
+    children = getChildrenFromPath(env,path)
+    count = 0
+    for child in children:
+        # pour les tests, on choisit les pinces que le programme sélectionne
+        if child.name in names:
+            pince_studied = Pince(env)
+            print("On enregistre la pince ", child.name)
+            pince_studied.getCatiaInstance(child.name)
+            pince_studied.getPrincipalAxes()
+            pince_studied.getBBOParameters(env)
+            pince_studied.computeGeometricalCenter()
+            pince_studied.getLocalCenter()
+            pince_studied.getCollisionHull()
+            array.append(pince_studied)
+            count+=1
+            set_key(env_path, 'TEXT_LABEL', f"Patienter - {count} pinces ont été enregistrées")
+
+    print("Fin de selectPinces")
+    return array
+
+def selectPCM(env,names):
+    array = []
+
+    pcm = Pcm(env)
+    path = pcm.getTreePath('PCM_TREE_PATH')
+
+    # recuperation du chemin ou est situe l'executable
+    application_path = getApplicationPath()
+    # On en deduit que le fichier .env se situe dans le même répertoire
+    env_path = os.path.join(application_path, '.env')
+
+    set_key(env_path, 'TEXT_LABEL', f"Patienter - Sélection des PCM en cours")
+        
+    # Une fois au bon niveau, rechercher la pièce
+    children = getChildrenFromPath(env,path)
+    count = 0
+    for index,child in enumerate(children):
+        # pour les tests, on choisit les pinces que le programme sélectionne
+        if child.name in names:
+            pcm_studied = Pcm(env)
+            print("On enregistre le PCM ", child.name)
+            pcm_studied.getCatiaInstance(child.name)
+            pcm_studied.getPrincipalAxes()
+            pcm_studied.getBBOParameters(env)
+            pcm_studied.computeGeometricalCenter()
+            pcm_studied.getLocalCenter()
+            pcm_studied.getStickPoints()
+            array.append(pcm_studied)
+            count += 1
+            set_key(env_path, 'TEXT_LABEL', f"Patienter - {count} PCM ont été enregistrés")
+
+    print("Fin de selectPcm")
+    return array
+
+def selectSerrages(env,names):
+    array = []
+
+    pcm = Pcm(env)
+    path = pcm.getTreePath('SERRAGE_TREE_PATH')
+
+    # recuperation du chemin ou est situe l'executable
+    application_path = getApplicationPath()
+    # On en deduit que le fichier .env se situe dans le même répertoire
+    env_path = os.path.join(application_path, '.env')
+
+    set_key(env_path, 'TEXT_LABEL', f"Patienter - Enregistrement des serrages en cours")
+        
+    # Une fois au bon niveau, rechercher la pièce
+    children = getChildrenFromPath(env,path)
+    count = 0
+    for index,child in enumerate(children):
+        # pour les tests, on choisit les pinces que le programme sélectionne
+        if child.name in names:
+            serrage_studied = Serrage(env)
+            print("On enregistre le serrage ", child.name)
+            serrage_studied.getCatiaInstance(child.name)
+            serrage_studied.getPrincipalAxes()
+            serrage_studied.getBBOParameters(env)
+            serrage_studied.computeGeometricalCenter()
+            serrage_studied.getLocalCenter()
+            serrage_studied.getStickPoints()
+            array.append(serrage_studied)
+            count += 1
+            set_key(env_path, 'TEXT_LABEL', f"Patienter - {count} serrages ont été enregistrés")
+
+    print("Fin de selectSerrage")
+    return array
+
+"""
 def selectParts(env,pince,serrage,pcm,selection_event):
     inertia_cmd_name = "Mesures d'inertie" 
     selection = env.document.selection
@@ -63,16 +162,19 @@ def selectParts(env,pince,serrage,pcm,selection_event):
     env_path = os.path.join(application_path, '.env')
 
     c = 0
+    #c = 1 # pour les tests, on enregistre uniquement le serrage
     while c < 3:
 
         # On demande a l'utilisateur de selectionner le PCM, puis le serrage, puis le(s) pince(s)
         if c == 0:
             set_key(env_path, 'TEXT_LABEL', "Sélectionner le PCM")
             selection_event.wait()
-            while selection_event.get() != "confirmed": # cette partie là est intuile pour le moment ( un seul bouton )
+            while selection_event.get() != "confirmed": 
+                # cette partie là est inutile pour le moment ( un seul bouton )
                 print("Il faut confirmer la sélection")
             selection_event.clear()
             set_key(env_path, 'TEXT_LABEL', "Patienter")
+
         elif c == 1:
             set_key(env_path, 'TEXT_LABEL', "Sélectionner le serrage")
             selection_event.wait()
@@ -80,13 +182,14 @@ def selectParts(env,pince,serrage,pcm,selection_event):
                 print("Il faut confirmer la sélection")
             selection_event.clear()
             set_key(env_path, 'TEXT_LABEL', "Patienter")
+
         else:
             set_key(env_path, 'TEXT_LABEL', "Sélectionner la pince")
             selection_event.wait()
             while selection_event.get() != "confirmed":
                 print("Il faut confirmer la sélection")
             selection_event.clear()
-            set_key(env_path, 'TEXT_LABEL', "Patienter")
+            set_key(env_path, 'TEXT_LABEL', "Patienter") 
 
         # on recupere l'objet selectionne par l'utilisateur
         selection = env.document.selection
@@ -94,32 +197,29 @@ def selectParts(env,pince,serrage,pcm,selection_event):
         catia_object = selected_item.reference
         object_selected_name = catia_object.name
 
-        env.caa.start_command(inertia_cmd_name)
+        #env.caa.start_command(inertia_cmd_name)
 
         try:
-
-            # Retrieve the bounding box parameters from the CATPart
-            BBOx,BBOy,BBOz,BBLx,BBLy,BBLz = getBoundingBoxParameters(env)
-            BBO_BBL_parameters = [BBOx,BBOy,BBOz,BBLx,BBLy,BBLz]
-
             if c == 0:
                 pcm.getCatiaInstance(object_selected_name)
                 pcm.getPrincipalAxes()
-                pcm.fillBBOArray(BBO_BBL_parameters)
+                pcm.getBBOParameters(env)
                 pcm.computeGeometricalCenter()
                 pcm.getLocalCenter()
                 pcm.getStickPoints()
             elif c == 1:
                 serrage.getCatiaInstance(object_selected_name)
                 serrage.getPrincipalAxes()
-                serrage.fillBBOArray(BBO_BBL_parameters)
+                serrage.getBBOParameters(env)
                 serrage.computeGeometricalCenter()
                 serrage.getLocalCenter()
                 serrage.getStickPoints()
+                # Pour les tests : on ne selectionne plus les pinces
+                c += 1
             else:
                 pince.getCatiaInstance(object_selected_name)
                 pince.getPrincipalAxes()
-                pince.fillBBOArray(BBO_BBL_parameters)
+                pince.getBBOParameters(env)
                 pince.computeGeometricalCenter()
                 pince.getLocalCenter()
                 pince.getCollisionHull()
@@ -131,10 +231,14 @@ def selectParts(env,pince,serrage,pcm,selection_event):
             continue
 
         selection.clear()
+        #closeInertiaWindow()
 
         print("OK suivant")
 
         c += 1
+"""
+
+# TODO : il va falloir appeler une seule fois generate_ALLCATPart pour tous les PCM sinon il y aura le problème de surcharge memoire
 
 def startBackend(selection_event):
 
@@ -147,28 +251,41 @@ def startBackend(selection_event):
         env.document = env.caa.active_document  # recuperer le document catia ouvert au lancement du programme
         env.product = env.document.product
         env.spa_i = env.document.spa_workbench().inertias
-        while True:
+
+        # test : initiliaser l'environnement com_object au demarrage
+        env.com_object = win32com.client.Dispatch("CATIA.Application")
+        env.com_object.Visible = True  # Optionnel : rendre CATIA visible ou non
+
+        continuer = True
+
+        while continuer:
             try:
-                serrage = Serrage(env)
-                pcm = Pcm(env)
-                pince = Pince(env)
+                #serrage = Serrage(env)
+                #pcm = Pcm(env)
+                #pince = Pince(env) # inutile pour le test
+                tab_pinces = selectPinces(env,["PINCE_A04_A05.7","PINCE_A04_A05.9"]) # pour les tests, on choisit les pinces que l'on sélectionne
+                tab_pinces_collision_hulls = [p.global_collision_hull for p in tab_pinces]
+                tab_pcm = selectPCM(env,["APPUI-TOUCHE-PCM.3","APPUI-TOUCHE-PCM.15"]) # pour les tests, on choisit les pcm que l'on sélectionne
+                tab_serrages = selectSerrages(env,["SERRAGE_DIN_040.1","SERRAGE_DIN_040.3"])
 
-                selectParts(env,pince,serrage,pcm,selection_event)
+                #selectParts(env,pince,serrage,pcm,selection_event)
 
-                serrage.positionOntoPCM(pcm.global_stick_points,pcm.name,pcm.path)
+                for index,serrage in enumerate(tab_serrages):
+                    serrage.positionOntoPCM(tab_pcm[index].global_stick_points,tab_pcm[index].name,tab_pcm[index].path)
+                    serrage.update()
+                    serrage.getCollisionHull()
+                    serrage.rotateUntilNoCollision(tab_pinces_collision_hulls)
 
-                serrage.update() # mise a jour necessaire car le serrage a bouge
+                if input("Continuer ?") == 'n':
+                    continuer = False
 
-                serrage.getCollisionHull()
-
-                serrage.rotateUntilNoCollision(pince.global_collision_hull)
             except Exception as e:
                 # recuperation du chemin ou est situe l'executable
                 application_path = getApplicationPath()
                 # On en deduit que le fichier .env se situe dans le même répertoire
                 env_path = os.path.join(application_path, '.env')
                 set_key(env_path, 'TEXT_LABEL', f"Erreur rencontrée : {e}")
-                time.sleep(3)
+                time.sleep(5)
 
     finally:
         # Nettoyage COM

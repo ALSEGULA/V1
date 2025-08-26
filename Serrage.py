@@ -240,8 +240,8 @@ class Serrage(Object):
         # A ce stade les plans sont paralleles, les lignes suivantes s'occupent de la rotation de 180° si necessaire pour avoir la meme orientation
         vec1 = np.array(self.global_stick_points[3] - np.array(self.global_stick_points[1]))
         vec2 = np.array(stick_points_PCMFRA[3] - np.array(stick_points_PCMFRA[1]))
-        vec1 /= np.linalg.norm(vec1)
-        vec2 /= np.linalg.norm(vec2)
+        vec1 /= np.linalg.norm(vec1) # inutile
+        vec2 /= np.linalg.norm(vec2) # inutile
 
         if(np.dot(vec1,vec2) < 0):
             rotation_axis = [self.global_stick_points[1],self.global_stick_points[2]]
@@ -407,6 +407,7 @@ class Serrage(Object):
 
         return True
     
+    """
     # fonction qui tourne le serrage jusqu'a ce qu'il n'y ait plus collision entre sa primitive de collsiion et celle passe en parametre
     # ( qui est celle de la pince )
     # Si on arrive a une rotation de 180° sans avoir trouve d'angle qui convient, la fonction s'arrete
@@ -424,6 +425,38 @@ class Serrage(Object):
                 if self.isInCollision(collision_hull):
                     collision_detected = True
                     break
+            if not collision_detected:
+                print("Solution trouvee")
+                set_key(env_path, 'TEXT_LABEL', "Solution trouvée")
+                time.sleep(3)
+                return
+
+            self.rotateAroundAxis(self.global_rotation_axis,sense_of_rotation*angle)
+            self.rotateStickPointsAndBBOAroundAxis(self.global_rotation_axis,sense_of_rotation*angle)
+            sense_of_rotation = -sense_of_rotation
+
+        print("Pas de solution trouvée")
+        set_key(env_path, 'TEXT_LABEL', "Pas de solution trouvée")
+        time.sleep(3)
+        """
+    
+    # fonction qui tourne le serrage jusqu'a ce qu'il n'y ait plus collision entre sa primitive de collsiion et celles passees en parametre
+    # ( qui sont celles des pinces a risque )
+    # Si on arrive a une rotation de 180° sans avoir trouve d'angle qui convient, la fonction s'arrete
+    def rotateUntilNoCollision(self,collision_hull_pinces):
+        application_path = getApplicationPath()
+        env_path = os.path.join(application_path, '.env')
+
+        collision_detected = False
+        sense_of_rotation = 1
+
+        for angle in range(180):
+            collision_detected = False
+            for pince in collision_hull_pinces:
+                for collision_hull in pince:
+                    if self.isInCollision(collision_hull):
+                        collision_detected = True
+                        break
             if not collision_detected:
                 print("Solution trouvee")
                 set_key(env_path, 'TEXT_LABEL', "Solution trouvée")

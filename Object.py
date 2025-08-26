@@ -10,6 +10,8 @@ import win32com.client
 from getApplicationPath import getApplicationPath
 from dotenv import load_dotenv
 
+import pyautogui # tester l'appui simule sur la touche echap
+
 class Object:
     def __init__(self,env):
         self.catia_instance = None
@@ -115,59 +117,43 @@ class Object:
     def getBBOParameters(self,env):
         try:
             # Ouvrir une instance de CATIA via COM
-            catia = win32com.client.Dispatch("CATIA.Application")
-            catia.Visible = True  # Optionnel : rendre CATIA visible ou non
             
             # Récupérer l'objet COM du produit
-            selection = catia.ActiveDocument.Selection
+            selection = env.com_object.ActiveDocument.Selection
             selection.clear()  # Vider la sélection existante
 
             # Ajouter l'objet COM du produit à la sélection virtuelle
             selection.Add(self.catia_instance.com_object)  # Utilisation de com_object (en minuscule)
 
             # Lancer la commande "Mesures d'inertie"
-            catia.StartCommand("Mesures d'inertie")
+            env.com_object.StartCommand("Mesures d'inertie")
+            print(f"On vient de lancer la commande mesure d'inertie sur {self.catia_instance.name}")
 
             # Attendre que la commande se termine (une petite pause pour s'assurer que la commande est exécutée)
             time.sleep(10)  
 
             self.fillBBOArray(env)
 
+            selection.clear() # test
+
             # On ferme la fenêtre de mesure d'inertie
-            window = catia.ActiveWindow
+            window = env.com_object.ActiveWindow
             if window is not None:
                 window.Close()  
+                # Il est necessaire de simuler des appuis sur echap ( tests avec 4 OK, parfois 3 pas suffisant )
+                # pour fermer correcetement les fenêtres de mesure d'inertie
+                time.sleep(0.25)
+                pyautogui.press('esc')
+                time.sleep(0.25)
+                pyautogui.press('esc')
+                time.sleep(0.25)
+                pyautogui.press('esc')
+                time.sleep(0.25)
+                pyautogui.press('esc')
 
         except Exception as e:
             print(f"Erreur lors du lancement de la commande inertie sur {self.name}: {e}")
-    
-    # / separateur et // pour ignorer /
-    # TODO : a commenter et arranger
-    def customSplit(self,s):
-        parts = []
-        buffer = ""
-        i = 0
 
-        if s==None:
-            return parts
-
-        if len(s) == 0:
-            return parts
-
-        while i < len(s):
-            if s[i] == "/":
-                if i + 1 < len(s) and s[i + 1] == "/":
-                    buffer += "/"  # Ajoute un seul slash
-                    i += 2         # Ignore les deux slashes
-                else:
-                    parts.append(buffer)
-                    buffer = ""
-                    i += 1
-            else:
-                buffer += s[i]
-                i += 1
-        parts.append(buffer)  # Ajouter le dernier morceau
-        return parts
     
     # fonction qui renvoie un tableau rensiegnant le chemin pour aller chercher l'objet dans l'arborescence catia
     # la valeur de ce tableau est stockée dans la variable d'environnement de cle 'key'
@@ -176,9 +162,36 @@ class Object:
         env_path = os.path.join(application_path, '.env')
         load_dotenv(env_path,override=True)
 
-        chemin = os.getenv(key)
+        # / separateur et // pour ignorer /
+        # TODO : a commenter et arranger
+        def customSplit(s):
+            parts = []
+            buffer = ""
+            i = 0
 
-        tableau_dossiers = self.customSplit(chemin)
+            if s==None:
+                return parts
+
+            if len(s) == 0:
+                return parts
+
+            while i < len(s):
+                if s[i] == "/":
+                    if i + 1 < len(s) and s[i + 1] == "/":
+                        buffer += "/"  # Ajoute un seul slash
+                        i += 2         # Ignore les deux slashes
+                    else:
+                        parts.append(buffer)
+                        buffer = ""
+                        i += 1
+                else:
+                    buffer += s[i]
+                    i += 1
+            parts.append(buffer)  # Ajouter le dernier morceau
+            return parts
+
+        chemin = os.getenv(key)
+        tableau_dossiers = customSplit(chemin)
 
         return tableau_dossiers
 
@@ -231,7 +244,6 @@ class Object:
     # fonction pour convertir les coordonnées de array dans le repère global en coordonnées dans le repère local de la piece
     def convertGlobalToLocal(self,array):
         try:
-
             if self.frame_conversion_matrix is None:
                 self.getFrameConversionMatrix()
             if self.cog is None:
