@@ -8,3 +8,4 @@ class Environnement:
     document: object = None
     product: object = None
     spa_i: object = None
+    com_object: object = None

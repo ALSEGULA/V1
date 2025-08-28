@@ -127,7 +127,6 @@ class Object:
 
             # Lancer la commande "Mesures d'inertie"
             env.com_object.StartCommand("Mesures d'inertie")
-            print(f"On vient de lancer la commande mesure d'inertie sur {self.catia_instance.name}")
 
             # Attendre que la commande se termine (une petite pause pour s'assurer que la commande est exécutée)
             time.sleep(10)  

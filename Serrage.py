@@ -364,7 +364,7 @@ class Serrage(Object):
         # Une fois arrivé ici, le serrage est bien positionné. 
         # On actualise alors son centre de gravite, sa matrice de changement de base, sa médiane locale et son axe de rotation
 
-    # fonction qui renvoie True si la primitive de collision du serrage est en collision avec la primitive de collision d ela pince
+    # fonction qui renvoie True si la primitive de collision du serrage est en collision avec la primitive de collision de la pince
     # On se base sur l'algorithme SAT ( Separating Axes Theorem )
     def isInCollision(self,collision_hull):
 
@@ -440,7 +440,7 @@ class Serrage(Object):
         time.sleep(3)
         """
     
-    # fonction qui tourne le serrage jusqu'a ce qu'il n'y ait plus collision entre sa primitive de collsiion et celles passees en parametre
+    # fonction qui tourne le serrage jusqu'a ce qu'il n'y ait plus collision entre sa primitive de collisiion et celles passees en parametre
     # ( qui sont celles des pinces a risque )
     # Si on arrive a une rotation de 180° sans avoir trouve d'angle qui convient, la fonction s'arrete
     def rotateUntilNoCollision(self,collision_hull_pinces):

@@ -4,6 +4,7 @@ import Environnement
 import mainDependencies
 import pythoncom
 import os
+import numpy as np
 import time # pour les tests
 
 from Serrage import Serrage
@@ -68,7 +69,6 @@ def selectPinces(env,names):
         # pour les tests, on choisit les pinces que le programme sélectionne
         if child.name in names:
             pince_studied = Pince(env)
-            print("On enregistre la pince ", child.name)
             pince_studied.getCatiaInstance(child.name)
             pince_studied.getPrincipalAxes()
             pince_studied.getBBOParameters(env)
@@ -102,7 +102,6 @@ def selectPCM(env,names):
         # pour les tests, on choisit les pinces que le programme sélectionne
         if child.name in names:
             pcm_studied = Pcm(env)
-            print("On enregistre le PCM ", child.name)
             pcm_studied.getCatiaInstance(child.name)
             pcm_studied.getPrincipalAxes()
             pcm_studied.getBBOParameters(env)
@@ -136,7 +135,6 @@ def selectSerrages(env,names):
         # pour les tests, on choisit les pinces que le programme sélectionne
         if child.name in names:
             serrage_studied = Serrage(env)
-            print("On enregistre le serrage ", child.name)
             serrage_studied.getCatiaInstance(child.name)
             serrage_studied.getPrincipalAxes()
             serrage_studied.getBBOParameters(env)
@@ -239,6 +237,7 @@ def selectParts(env,pince,serrage,pcm,selection_event):
 """
 
 # TODO : il va falloir appeler une seule fois generate_ALLCATPart pour tous les PCM sinon il y aura le problème de surcharge memoire
+# TODO : Autre probleme -> quand on cree un executable, on est oblige de kill le processus main.exe manuellement uune fois le programme termine
 
 def startBackend(selection_event):
 
@@ -263,21 +262,33 @@ def startBackend(selection_event):
                 #serrage = Serrage(env)
                 #pcm = Pcm(env)
                 #pince = Pince(env) # inutile pour le test
+                
                 tab_pinces = selectPinces(env,["PINCE_A04_A05.7","PINCE_A04_A05.9"]) # pour les tests, on choisit les pinces que l'on sélectionne
-                tab_pinces_collision_hulls = [p.global_collision_hull for p in tab_pinces]
-                tab_pcm = selectPCM(env,["APPUI-TOUCHE-PCM.3","APPUI-TOUCHE-PCM.15"]) # pour les tests, on choisit les pcm que l'on sélectionne
+                #tab_pinces_collision_hulls = [p.global_collision_hull for p in tab_pinces]
+                tab_pcm = selectPCM(env,["APPUI-TOUCHE-PCM.3","APPUI-TOUCHE-PCM.8"]) # pour les tests, on choisit les pcm que l'on sélectionne
                 tab_serrages = selectSerrages(env,["SERRAGE_DIN_040.1","SERRAGE_DIN_040.3"])
 
                 #selectParts(env,pince,serrage,pcm,selection_event)
+                print("tab_serrages : ", tab_serrages)
 
                 for index,serrage in enumerate(tab_serrages):
+                    print("\nOn va placer un nouveau serrage\n")
                     serrage.positionOntoPCM(tab_pcm[index].global_stick_points,tab_pcm[index].name,tab_pcm[index].path)
                     serrage.update()
                     serrage.getCollisionHull()
-                    serrage.rotateUntilNoCollision(tab_pinces_collision_hulls)
+                    risky_pinces_collision_hulls = []
+                    # on ne recupere que les pinces dans un certain rayon du PCM
+                    for pince in tab_pinces:
+                        # TODO : ATtention -> Cete definition de la grande diagonale est trop dependante de la manière dont les BBO de la pince ont été définis
+                        longueur_grande_diagonale = np.linalg.norm(np.array(pince.BBO[0]) - np.array(pince.BBO[7]))
+                        if 1000*np.linalg.norm(np.array(pince.cog)-np.array(tab_pcm[index].cog)) < longueur_grande_diagonale:
+                            risky_pinces_collision_hulls.append(pince.global_collision_hull)
+                            print("Ajout d'une pince a risque")
+                    serrage.rotateUntilNoCollision(risky_pinces_collision_hulls)
 
                 if input("Continuer ?") == 'n':
                     continuer = False
+                
 
             except Exception as e:
                 # recuperation du chemin ou est situe l'executable

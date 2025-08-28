@@ -17,8 +17,8 @@ def main():
     backend_thread = threading.Thread(target=startBackend, args=(selection_event,))
     backend_thread.start()
 
-    # Lancer la boucle principale
-    app.mainloop()
+    # Lancer la boucle principale pour le frontend
+    run(app)
     
 if __name__ == "__main__":
     main()

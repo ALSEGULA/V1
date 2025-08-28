@@ -6,7 +6,6 @@ from pycatia.product_structure_interfaces.product import Product
 from pycatia.product_structure_interfaces.product_document import ProductDocument
 from pycatia.space_analyses_interfaces.inertia import Inertia
 from pycatia.part_interfaces.rotate import Rotate
-import numpy as np
 
 ##########################################################
 # insert syspath to project folder so examples can be run.
