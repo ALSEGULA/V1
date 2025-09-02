@@ -33,11 +33,17 @@ class SelectionApp(ctk.CTk):
 
         self.selection_event = selection_event
 
+        # Variables pour stocker les valeurs précédentes
+        self.previous_pcm = None
+        self.previous_serrage = None
+        self.previous_solution_found = None
+        self.previous_solution_unfound = None
+
         # on recupere le chemin de .env
         self.application_path = getApplicationPath()
         self.env_path = os.path.join(self.application_path, '.env')
 
-        self.title("Selection App")
+        self.title("Logiciel d'automatisation TAS")
         self.geometry("800x300")
 
         self.label = ctk.CTkLabel(self, text="Selectionner le PCM")
@@ -61,6 +67,13 @@ class SelectionApp(ctk.CTk):
         self.pince_textbox = ctk.CTkEntry(self, placeholder_text="Chemin de la pince")
         self.pince_textbox.grid(row=2, column=2, padx=20, pady=(0, 10), sticky="we")
 
+        # Créer un cadre pour le tableau
+        self.table_frame = ctk.CTkFrame(self)
+        self.table_frame.grid(row=4, column=0, columnspan=3, pady=20, sticky="nsew")
+
+        # Initialiser le tableau
+        self.table_rows = []
+
         self.confirmed_button = ctk.CTkButton(self, text="Confirmer la sélection", command=self.pressConfirmedButton)
         self.confirmed_button.grid(row=3, column=0, columnspan=3, pady=20)
 
@@ -73,6 +86,8 @@ class SelectionApp(ctk.CTk):
 
         # Lancer la mise à jour du label toutes les 100 ms (cela vérifie régulièrement la valeur dans le fichier .env)
         self.updateLabelPeriodically()
+        # Lancer la mise à jour du tableau
+        self.updateTablePeriodically()
 
     def fillTextBox(self):
         load_dotenv(self.env_path,override=True)
@@ -120,6 +135,78 @@ class SelectionApp(ctk.CTk):
     def updatePinceTreePlace(self,event):
         """Fonction qui met à jour la variable d'environnement PINCE_TREE_PATH avec la valeur de la textbox"""
         set_key(self.env_path, 'PINCE_TREE_PATH', self.pince_textbox.get())
+
+    def updateTablePeriodically(self):
+        """Fonction qui vérifie périodiquement les valeurs des clés 'NEW_SERRAGE' et 'NEW_PCM' dans le fichier .env"""
+        load_dotenv(self.env_path, override=True)
+
+        new_serrage = os.getenv('NEW_SERRAGE')
+        new_pcm = os.getenv('NEW_PCM')
+        serrage_solution_found = os.getenv('SOLUTION_FOUND')
+        serrage_solution_unfound = os.getenv('SOLUTION_UNFOUND')
+
+        # Vérifier si les nouvelles valeurs sont différentes des valeurs précédentes
+        if (new_serrage and new_serrage != self.previous_serrage) or (new_pcm and new_pcm != self.previous_pcm):
+            self.addRowToTable(new_serrage, new_pcm)
+            self.previous_serrage = new_serrage
+            self.previous_pcm = new_pcm
+            self.updateTableDisplay()
+
+        # Vérifier si les solutions ont changé
+        if serrage_solution_found and serrage_solution_found != self.previous_solution_found:
+            self.updateSolutionInTable(serrage_solution_found, "V")
+            self.previous_solution_found = serrage_solution_found
+
+        if serrage_solution_unfound and serrage_solution_unfound != self.previous_solution_unfound:
+            self.updateSolutionInTable(serrage_solution_unfound, "X")
+            self.previous_solution_unfound = serrage_solution_unfound
+
+        # Appeler cette fonction encore dans 100 ms
+        self.after(100, self.updateTablePeriodically)
+
+    def addRowToTable(self, serrage, pcm):
+        """Fonction qui ajoute une ligne au tableau"""
+        # Vérifier s'il y a une ligne vide à remplir
+        for row in self.table_rows:
+            if row[0].cget("text") == "" or row[1].cget("text") == "":
+                if serrage and row[0].cget("text") == "":
+                    row[0].configure(text=serrage)
+                    return # on part du principe que l'on n'a pas simultanement un nouveau serrage et un nouveau PCM
+                if pcm and row[1].cget("text") == "":
+                    row[1].configure(text=pcm)
+                    return
+
+        # Si aucune ligne vide n'est trouvée, ajouter une nouvelle ligne
+        row_frame = ctk.CTkFrame(self.table_frame)
+        row_frame.pack(fill="x", pady=2)
+
+        serrage_label = ctk.CTkLabel(row_frame, text=serrage if serrage else "")
+        serrage_label.pack(side="left", padx=5, pady=5, expand=True, fill="x")
+
+        pcm_label = ctk.CTkLabel(row_frame, text=pcm if pcm else "")
+        pcm_label.pack(side="left", padx=5, pady=5, expand=True, fill="x")
+
+        result_label = ctk.CTkLabel(row_frame, text="")
+        result_label.pack(side="left", padx=5, pady=5, expand=True, fill="x")
+
+        self.table_rows.append((serrage_label, pcm_label, result_label))
+
+    def updateSolutionInTable(self, serrage_name, result):
+        """Fonction qui met à jour la solution dans le tableau"""
+        for row in self.table_rows:
+            serrage_label, pcm_label, result_label = row
+            if serrage_label.cget("text") == serrage_name:
+                result_label.configure(text=result)
+                break
+        self.updateTableDisplay()
+
+    def updateTableDisplay(self):
+        """Fonction qui met à jour l'affichage du tableau"""
+        for row in self.table_rows:
+            serrage_label, pcm_label, result_label = row
+            serrage_label.update()
+            pcm_label.update()
+            result_label.update()
 
 # Attention ! run n'est pas appel dans le main, cette foction est intuile pour le moment
 def run(app):

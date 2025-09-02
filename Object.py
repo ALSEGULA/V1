@@ -10,7 +10,7 @@ import win32com.client
 from getApplicationPath import getApplicationPath
 from dotenv import load_dotenv
 
-import pyautogui # tester l'appui simule sur la touche echap
+import pyautogui 
 
 class Object:
     def __init__(self,env):
@@ -156,6 +156,8 @@ class Object:
     
     # fonction qui renvoie un tableau rensiegnant le chemin pour aller chercher l'objet dans l'arborescence catia
     # la valeur de ce tableau est stockée dans la variable d'environnement de cle 'key'
+    # TODO : cette fonction est maintenant obsolète, il va falloir la supprimer a terme
+    # La fonction utilisée est maintenant dans utils
     def getTreePath(self,key):
         application_path = getApplicationPath()
         env_path = os.path.join(application_path, '.env')

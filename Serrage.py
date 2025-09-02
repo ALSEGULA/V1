@@ -251,10 +251,12 @@ class Serrage(Object):
 
     # fonction qui renvoie un booleen selon que le serrage est en bonne position ou non.
     # Si non, une rotation de 180° est necessaire
-    def isInGoodPosition(self,name_PCMFRA,path_PCMFRA): 
+    # def isInGoodPosition(self,name_PCMFRA,path_PCMFRA):
+    def isInGoodPosition(self,cog_touche): 
         testPointClamp1 = np.array(self.global_stick_points[2])
         testPointClamp2 = np.array(self.global_stick_points[0])
 
+        """
         product = self.env.product
         caa = self.env.caa
 
@@ -281,6 +283,7 @@ class Serrage(Object):
 
         if cog_touche is None:
             print("La touche n'a pas ete trouvee !") # faire un raiseError
+        """
 
         # la condition suivante permet de determiner si le serrage est correcteemnt incline ou non
         if np.linalg.norm(testPointClamp1 - cog_touche) < np.linalg.norm(testPointClamp2 - cog_touche):
@@ -326,7 +329,7 @@ class Serrage(Object):
                 point[2] + translation_vector[2]]
             
     # fonction qui definit la dernier étape pour coller le serrage avec le PCM : rotation pour que les deux pièces soient correctement alignées
-    def rotateToStickToPCM(self,stick_points_PCMFRA,name_PCMFRA,path_PCMFRA):
+    def rotateToStickToPCM(self,stick_points_PCMFRA,cog_touche):
 
         # TODO : revenir sur cette partie qui est 
         # 1 trop specifique au serrage utilise pendant les tests
@@ -356,7 +359,8 @@ class Serrage(Object):
         self.rotateAroundAxis(rotation_axis,angle_to_rotate)
         self.rotateStickPointsAndBBOAroundAxis(rotation_axis,angle_to_rotate)
 
-        if not self.isInGoodPosition(name_PCMFRA,path_PCMFRA):
+        #if not self.isInGoodPosition(name_PCMFRA,path_PCMFRA):
+        if not self.isInGoodPosition(cog_touche):
             # il faut tourner de 180° pour etre dans le bon sens
             self.rotateAroundAxis(rotation_axis,180)
             self.rotateStickPointsAndBBOAroundAxis(rotation_axis,180)
@@ -459,8 +463,7 @@ class Serrage(Object):
                         break
             if not collision_detected:
                 print("Solution trouvee")
-                set_key(env_path, 'TEXT_LABEL', "Solution trouvée")
-                time.sleep(3)
+                set_key(env_path, 'SOLUTION_FOUND', self.name)
                 return
 
             self.rotateAroundAxis(self.global_rotation_axis,sense_of_rotation*angle)
@@ -468,8 +471,16 @@ class Serrage(Object):
             sense_of_rotation = -sense_of_rotation
 
         print("Pas de solution trouvée")
-        set_key(env_path, 'TEXT_LABEL', "Pas de solution trouvée")
-        time.sleep(3)
+        # on ramène le serrage sans olution à l'origine 
+        translation_matrix = (
+            1,0,0,
+            0,1,0,
+            0,0,1,
+            -1000*self.cog[0],-1000*self.cog[1],-1000*self.cog[2]
+        )
+        move = self.catia_instance.move.apply(translation_matrix)
+        print("On vient de recentrer le serrage qui n'a pas de solution")
+        set_key(env_path, 'SOLUTION_UNFOUND', self.name)
 
     # fonction de mise à jour à appeler une fois que le serrage à bouger pour prendre en compte les modifications
     def update(self):
@@ -481,7 +492,7 @@ class Serrage(Object):
         self.getLocalCenter()
         self.getRotationAxis()
     # fonction qui effectue les trois étapes pour positionner le serrage sur le PCM dont les paramètres sont passés en argument
-    def positionOntoPCM(self,stick_points_pcm,pcm_name,pcm_path):
+    def positionOntoPCM(self,stick_points_pcm,cog_touche):
         self.alignOrientedPlans(stick_points_pcm)
         self.stickToPCM(stick_points_pcm)
-        self.rotateToStickToPCM(stick_points_pcm,pcm_name,pcm_path) 
+        self.rotateToStickToPCM(stick_points_pcm,cog_touche) 
